@@ -2,37 +2,35 @@ import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 const InsuranceComparison = () => {
-  // Define key dates at component level
+  // Define key dates and assumptions
   const startYear = 2024;
   const currentAge = 41;
   const viktorLifeExpectancy = 81;
   const gannaLifeExpectancy = 88;
-  
-  // Children's current ages and leave years
+
+  // Children current ages and leave years
   const child1CurrentAge = 19;
   const child2CurrentAge = 16;
-  const child1LeaveYear = startYear + (25 - child1CurrentAge);
-  const child2LeaveYear = startYear + (25 - child2CurrentAge);
-  
-  // Key life events
-  const gbzEndYear = startYear + (60 - currentAge);
+  const child1LeaveYear = startYear + (25 - child1CurrentAge); // 2024 + 6 = 2030
+  const child2LeaveYear = startYear + (25 - child2CurrentAge); // 2024 + 9 = 2033
+
+  // GBZ ends at age 61 (when you turn 61, no more GBZ)
+  const gbzEndYear = startYear + (60 - currentAge); // age 60 ends, age 61 is first no-GBZ year
   const viktorEndYear = startYear + (viktorLifeExpectancy - currentAge);
   const gannaEndYear = startYear + (gannaLifeExpectancy - currentAge);
 
   const calculateProjection = () => {
     const data = [];
 
-    // Adult initial monthly premium (with GBZ at age 41)
-    // From previous info:
-    // Adult premium (no Kurkosten): 748.40€ (includes GBZ at age 41)
-    // Base premium = 748.40 / 1.1 ≈ 680.36€ at age 41
-    let viktorBasePremium = 680.36;   
-    let gannaBasePremium = 680.36;
+    // Initial adult premium at age 41 (no Kurkosten, includes GBZ):
+    // Given: Adult total at 41 = 748.40€ with GBZ
+    // Base premium = 748.40 / 1.1 ≈ 680.36€
+    const initialBasePremium = 680.36;
 
     // Child premium (no GBZ): 223.75€
     const childPremium = 223.75; 
 
-    // GKV initial: 2200€ 
+    // GKV initial: 2200€
     const gkvBase = 2200.00; 
 
     // Growth rates:
@@ -60,67 +58,42 @@ const InsuranceComparison = () => {
       const child1Covered = year < child1LeaveYear; 
       const child2Covered = year < child2LeaveYear;
 
-      // Determine adult premiums this year:
-      // Calculate how many years since start
-      const yearsSinceStart = i; 
-
-      // For adults, we need to find the premium each year:
-      let currentViktorBase = viktorBasePremium;
-      let currentGannaBase = gannaBasePremium;
-
-      // If age > 60, use the post-60 growth rate
-      // If age <= 60, use pre-61 growth
-      // Actually apply annual growth based on age:
+      // Calculate adult base premium for this age
+      let currentBasePremium;
       if (age > 60) {
-        // From age 61 onwards:
-        // We must reconstruct the premium at this age:
-        // Simplify by splitting into two phases:
-        const yearsToSixty = 60 - currentAge; 
-        const yearsAfterSixty = age - 60; 
+        // Split into two phases:
+        const yearsToSixty = 60 - 41; // 19 years at 3%
+        const premiumAt60 = initialBasePremium * Math.pow(1 + adultIncreaseBefore61, yearsToSixty);
 
-        // Base at 41: 680.36€
-        // Increase 3% for yearsToSixty:
-        let baseAfter60 = 680.36 * Math.pow((1+adultIncreaseBefore61), yearsToSixty);
-        // Then 2% for yearsAfterSixty:
-        baseAfter60 *= Math.pow((1+adultIncreaseAfter60), yearsAfterSixty);
-
-        currentViktorBase = baseAfter60;
-        currentGannaBase = baseAfter60;
+        const yearsAfterSixty = age - 60;
+        currentBasePremium = premiumAt60 * Math.pow(1 + adultIncreaseAfter60, yearsAfterSixty);
       } else {
         // age <= 60
-        currentViktorBase = 680.36 * Math.pow((1+adultIncreaseBefore61), (age - 41));
-        currentGannaBase = 680.36 * Math.pow((1+adultIncreaseBefore61), (age - 41));
+        const yearsFrom41 = age - 41;
+        currentBasePremium = initialBasePremium * Math.pow(1 + adultIncreaseBefore61, yearsFrom41);
       }
 
-      // Actual adult premiums:
+      // Adult premiums (Viktor & Ganna)
       let currentViktorPKV = 0;
       if (viktorCovered) {
-        currentViktorPKV = (age <= 60) 
-          ? currentViktorBase * 1.1 // with GBZ
-          : currentViktorBase;      // no GBZ after 60
+        currentViktorPKV = (age <= 60) ? currentBasePremium * 1.1 : currentBasePremium;
       }
 
       let currentGannaPKV = 0;
       if (gannaCovered) {
-        currentGannaPKV = (age <= 60)
-          ? currentGannaBase * 1.1
-          : currentGannaBase;
+        currentGannaPKV = (age <= 60) ? currentBasePremium * 1.1 : currentBasePremium;
       }
 
-      // Children premiums:
-      // Child premiums grow at 3% each year since 41:
-      // Actually, they start at age 41 at 223.75€, so after i years:
+      // Children premiums
       const childMultiplier = Math.pow(1 + childIncrease, i);
       const currentChild1PKV = child1Covered ? childPremium * childMultiplier : 0;
       const currentChild2PKV = child2Covered ? childPremium * childMultiplier : 0;
 
-      // GKV:
-      // Grows at 3% per year from the start:
+      // GKV (no special changes)
       const gkvMultiplier = Math.pow(1 + gkvIncrease, i);
-      // Base GKV should be halved when Viktor's coverage ends
-      const currentGKV = gkvBase * gkvMultiplier * (viktorCovered ? 1 : 0.5);
+      const currentGKV = gkvBase * gkvMultiplier;
 
-      // Deductibles:
+      // Deductibles
       let membersWithDeductible = 0;
       if (viktorCovered) membersWithDeductible++;
       if (gannaCovered) membersWithDeductible++;
@@ -129,32 +102,51 @@ const InsuranceComparison = () => {
       const annualDeductible = membersWithDeductible * deductiblePerPerson;
       const monthlyDeductible = annualDeductible / 12;
 
-      // Total monthly PKV:
+      // Total monthly PKV
       const totalMonthlyPKV = currentViktorPKV + currentGannaPKV + currentChild1PKV + currentChild2PKV + monthlyDeductible;
 
-      // Annual costs:
+      // Annual costs
       const annualPKV = Math.round(totalMonthlyPKV * 12);
       const annualGKV = Math.round(currentGKV * 12);
 
-      // Calculate GBZ amount (the 10% portion)
+      // Calculate GBZ amount (only if age <= 60)
       let monthlyGBZ = 0;
       if (age <= 60) {
-        monthlyGBZ = (currentViktorPKV + currentGannaPKV) * 0.1;  // 10% of adult premiums
+        // GBZ is 10% of adults' premiums (Viktor+Ganna), not counting children or deductible
+        const adultsPKV = currentViktorPKV + currentGannaPKV;
+        monthlyGBZ = adultsPKV > 0 ? adultsPKV * (10/110) : 0; 
+        // Alternatively: monthlyGBZ = (adultsPKV/1.1)*0.1, but since we had base *1.1, 10% of total is simpler:
+        // Actually simpler: GBZ is precisely (adultsPKV * (10/110)) or just (adultsPKV - adultsPKV/1.1)
+        // but since adultsPKV includes the 10%, monthlyGBZ = adultsPKV - (adultsPKV/1.1)
+        // Let's keep monthlyGBZ = (adultsPKV * 0.1/1.1) is correct? 
+        // Actually, we know adultsPKV includes GBZ already if <= 60.
+        // If adultsPKV = base*1.1, base + 10% of base, 10% of that total is not correct for GBZ:
+        // Base *1.1 = base + 10% of base. The 10% of base is the GBZ.
+        // So GBZ = adultsPKV - baseAdults
+        // baseAdults = currentBasePremium (if covered)
+        // Let's do a simpler approach:
+        // If age <= 60:
+        // Viktor: if covered: base*1.1. base is currentBasePremium. So GBZ = base*0.1 per adult.
+        // For each covered adult: GBZ per adult = currentBasePremium *0.1
+        let adultsCount = 0;
+        if (viktorCovered) adultsCount++;
+        if (gannaCovered) adultsCount++;
+        monthlyGBZ = currentBasePremium * 0.1 * adultsCount;
       }
 
-      // Get previous values for cumulative calculations
+      // Get previous cumulative totals
       const prev = data[data.length - 1] || { 
         cumulativePKV: 0, 
         cumulativeGKV: 0,
         cumulativeGBZ: 0 
       };
 
-      // Calculate cumulative totals
+      // Cumulative totals
       const cumulativePKV = prev.cumulativePKV + annualPKV;
       const cumulativeGKV = prev.cumulativeGKV + annualGKV;
-      const cumulativeGBZ = prev.cumulativeGBZ + (monthlyGBZ * 12);
+      const cumulativeGBZ = prev.cumulativeGBZ + Math.round(monthlyGBZ * 12);
 
-      // Generate comment based on significant events
+      // Generate comment if hitting a key event
       let comment = '';
       if (year === child1LeaveYear) comment = 'Child 1 leaves';
       if (year === child2LeaveYear) comment = 'Child 2 leaves';
@@ -168,14 +160,14 @@ const InsuranceComparison = () => {
         monthlyPKV: Math.round(totalMonthlyPKV),
         monthlyGKV: Math.round(currentGKV),
         monthlyGBZ: Math.round(monthlyGBZ),
-        cumulativeGBZ: Math.round(cumulativeGBZ),
+        cumulativeGBZ,
         PKV: annualPKV,
         GKV: annualGKV,
         cumulativePKV,
         cumulativeGKV,
         difference: cumulativeGKV - cumulativePKV,
-        viktorBasePremium: Math.round(currentViktorBase),
-        gannaBasePremium: Math.round(currentGannaBase),
+        viktorBasePremium: Math.round(currentBasePremium),
+        gannaBasePremium: Math.round(currentBasePremium),
         child1Premium: Math.round(currentChild1PKV),
         child2Premium: Math.round(currentChild2PKV),
         deductible: Math.round(monthlyDeductible),
@@ -239,7 +231,7 @@ const InsuranceComparison = () => {
         </ResponsiveContainer>
       </div>
       
-      {/* New table section */}
+      {/* Data table */}
       <div className="overflow-x-auto mt-8">
         <table className="table-auto w-full text-sm">
           <thead>
