@@ -1,92 +1,84 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 const InsuranceComparison = () => {
-  // Key parameters
-  const startYear = 2024;
-  const currentAge = 41;
-  const viktorLifeExpectancy = 81;
-  const gannaLifeExpectancy = 88;
+  // Key parameters as state variables for flexibility:
+  const [startYear, setStartYear] = useState(2024);
+  const [currentAge, setCurrentAge] = useState(41);
+  const [viktorLifeExpectancy, setViktorLifeExpectancy] = useState(87);
+  const [gannaLifeExpectancy, setGannaLifeExpectancy] = useState(87);
 
-  // Children
-  const child1CurrentAge = 19; // Leaves at 25 => 6 years from now
-  const child2CurrentAge = 16; // Leaves at 25 => 9 years from now
-  const child1LeaveYear = startYear + (25 - child1CurrentAge); // 2030
-  const child2LeaveYear = startYear + (25 - child2CurrentAge); // 2033
+  const [child1CurrentAge, setChild1CurrentAge] = useState(19);
+  const [child2CurrentAge, setChild2CurrentAge] = useState(16);
 
-  // GBZ logic
-  const gbzStopPayAge = 60; 
-  const gbzStabilizeAge = 67; 
+  const [gbzStopPayAge, setGbzStopPayAge] = useState(60);
+  const [gbzStabilizeAge, setGbzStabilizeAge] = useState(67);
+  const [annualStabilizationAmount, setAnnualStabilizationAmount] = useState(94.42 * 12);
+  const [interestRate, setInterestRate] = useState(0.02);
 
-  // Calculate event years
-  const gbzEndYear = startYear + (gbzStopPayAge - currentAge);  // Year turning 61
-  const gbzStabilizeYear = startYear + (gbzStabilizeAge - currentAge);
-  const viktorEndYear = startYear + (viktorLifeExpectancy - currentAge);
-  const gannaEndYear = startYear + (gannaLifeExpectancy - currentAge);
+  const [initialBasePremium, setInitialBasePremium] = useState(680.36); // From previous calculation
+  const [basePremiumIncrease, setBasePremiumIncrease] = useState(0.03); // Renamed and default to 3%
+  const [childIncrease, setChildIncrease] = useState(0.03);
+  const [gkvIncrease, setGkvIncrease] = useState(0.03);
 
-  // Initial adult base premium at age 41 (no Kurkosten, includes GBZ)
-  // Given: Adult total at 41 = 748.40€ with GBZ (1.1 factor)
-  // base = 748.40 / 1.1 ≈ 680.36€
-  const initialBasePremium = 680.36;
+  const [childPremium, setChildPremium] = useState(223.75);
+  const [gkvBase, setGkvBase] = useState(2200.00);
+  const [deductiblePerPerson, setDeductiblePerPerson] = useState(800);
 
-  // Growth rates
-  const adultIncrease = 0.02; // 2% per year for base premium
-  const childIncrease = 0.03; // children at 3%
-  const gkvIncrease = 0.03;   // GKV at 3%
-
-  // Child premium (no GBZ)
-  const childPremium = 223.75;
-
-  // GKV initial
-  const gkvBase = 2200.00; 
-
-  // Deductible
-  const deductiblePerPerson = 800;
-
-  const totalYears = gannaLifeExpectancy - currentAge; // until Ganna ends
+  const totalYears = gannaLifeExpectancy - currentAge;
 
   const calculateProjection = () => {
+    let GBZ_fund = 0;
     const data = [];
 
     for (let i = 0; i <= totalYears; i++) {
       const year = startYear + i;
       const age = currentAge + i;
 
-      // Who is covered?
+      // Coverage
       const viktorCovered = age <= viktorLifeExpectancy;
       const gannaCovered = age <= gannaLifeExpectancy;
+
+      const child1LeaveYear = startYear + (25 - child1CurrentAge);
+      const child2LeaveYear = startYear + (25 - child2CurrentAge);
       const child1Covered = year < child1LeaveYear; 
       const child2Covered = year < child2LeaveYear;
 
-      // Calculate adult base premium for this age:
-      const yearsFrom41 = age - 41;
-      const currentBasePremium = initialBasePremium * Math.pow(1 + adultIncrease, yearsFrom41);
+      const yearsFrom41 = age - currentAge;
+      const currentBasePremiumCalc = initialBasePremium * Math.pow(1 + basePremiumIncrease, yearsFrom41);
 
-      // Apply GBZ logic:
+      // GBZ Discount logic
+      let hasGBZDiscount = false;
+      let monthlyDiscount = 0;
+      if (age >= gbzStabilizeAge) {
+        if (GBZ_fund >= annualStabilizationAmount) {
+          hasGBZDiscount = true;
+          monthlyDiscount = annualStabilizationAmount / 12;
+        }
+      }
+
+      // Adult premiums
       let currentViktorPKV = 0;
       let currentGannaPKV = 0;
 
       if (viktorCovered) {
-        if (age <= 60) {
-          // Ages 41-60: base * 1.1
-          currentViktorPKV = currentBasePremium * 1.1;
-        } else if (age <= 66) {
-          // Ages 61-66: base only
-          currentViktorPKV = currentBasePremium;
+        if (age <= gbzStopPayAge) {
+          currentViktorPKV = currentBasePremiumCalc * 1.1;
+        } else if (age <= gbzStabilizeAge - 1) {
+          currentViktorPKV = currentBasePremiumCalc;
         } else {
-          // Age >= 67: base - 94.42
-          const discounted = currentBasePremium - 94.42;
+          const discounted = currentBasePremiumCalc - (hasGBZDiscount ? monthlyDiscount : 0);
           currentViktorPKV = discounted > 0 ? discounted : 0;
         }
       }
 
       if (gannaCovered) {
-        if (age <= 60) {
-          currentGannaPKV = currentBasePremium * 1.1;
-        } else if (age <= 66) {
-          currentGannaPKV = currentBasePremium;
+        if (age <= gbzStopPayAge) {
+          currentGannaPKV = currentBasePremiumCalc * 1.1;
+        } else if (age <= gbzStabilizeAge - 1) {
+          currentGannaPKV = currentBasePremiumCalc;
         } else {
-          const discounted = currentBasePremium - 94.42;
+          const discounted = currentBasePremiumCalc - (hasGBZDiscount ? monthlyDiscount : 0);
           currentGannaPKV = discounted > 0 ? discounted : 0;
         }
       }
@@ -96,10 +88,9 @@ const InsuranceComparison = () => {
       const currentChild1PKV = child1Covered ? (childPremium * childMultiplier) : 0;
       const currentChild2PKV = child2Covered ? (childPremium * childMultiplier) : 0;
 
-      // GKV logic (3% growth, halved after Viktor ends)
+      // GKV
       const gkvMultiplier = Math.pow(1 + gkvIncrease, i);
-      const gkvFactor = viktorCovered ? 1 : 0.5;
-      const currentGKV = gkvBase * gkvMultiplier * gkvFactor;
+      const currentGKV = gkvBase * gkvMultiplier; // Both covered entire time
 
       // Deductibles
       let membersWithDeductible = 0;
@@ -110,55 +101,57 @@ const InsuranceComparison = () => {
       const annualDeductible = membersWithDeductible * deductiblePerPerson;
       const monthlyDeductible = annualDeductible / 12;
 
-      // Total monthly PKV
       const totalMonthlyPKV = currentViktorPKV + currentGannaPKV + currentChild1PKV + currentChild2PKV + monthlyDeductible;
-
-      // Annual costs
       const annualPKV = Math.round(totalMonthlyPKV * 12);
       const annualGKV = Math.round(currentGKV * 12);
 
-      // Calculate monthly GBZ while age <= 60:
-      let monthlyGBZ = 0;
-      if (age <= 60) {
+      // GBZ contributions
+      let annualGBZContributions = 0;
+      if (age <= gbzStopPayAge) {
         let adultsCount = 0;
         if (viktorCovered) adultsCount++;
         if (gannaCovered) adultsCount++;
-        monthlyGBZ = (currentBasePremium * 0.1) * adultsCount;
+        const monthlyGBZperAdult = currentBasePremiumCalc * 0.1;
+        annualGBZContributions = Math.round(monthlyGBZperAdult * adultsCount * 12);
       }
 
-      // Cumulative
-      const prev = data[data.length - 1] || { 
-        cumulativePKV: 0, 
-        cumulativeGKV: 0,
-        cumulativeGBZ: 0 
-      };
+      // Update GBZ fund at year end
+      let GBZ_fund_end = GBZ_fund + annualGBZContributions;
+
+      if (age >= gbzStabilizeAge && hasGBZDiscount) {
+        GBZ_fund_end = GBZ_fund_end - annualStabilizationAmount;
+        if (GBZ_fund_end < 0) GBZ_fund_end = 0;
+      }
+
+      GBZ_fund_end = Math.round(GBZ_fund_end * (1 + interestRate));
+      GBZ_fund = GBZ_fund_end;
+
+      const prev = data[data.length - 1] || { cumulativePKV: 0, cumulativeGKV: 0 };
       const cumulativePKV = prev.cumulativePKV + annualPKV;
       const cumulativeGKV = prev.cumulativeGKV + annualGKV;
-      const cumulativeGBZ = prev.cumulativeGBZ + Math.round(monthlyGBZ * 12);
 
-      // Comments for events
       let comment = '';
+      const gbzEndYearCalc = startYear+(gbzStopPayAge - currentAge);
+      const gbzStabilizeYear = startYear+(gbzStabilizeAge - currentAge);
       if (year === child1LeaveYear) comment = 'Child 1 leaves';
       if (year === child2LeaveYear) comment = 'Child 2 leaves';
-      if (year === gbzEndYear) comment = 'GBZ ends (age 61)';
+      if (year === gbzEndYearCalc) comment = 'GBZ ends (age 61)';
       if (year === gbzStabilizeYear) comment = 'GBZ stabilization (age 67)';
-      if (year === viktorEndYear) comment = 'Viktor ends (age 81)';
-      if (year === gannaEndYear) comment = 'Ganna ends (age 88)';
 
       data.push({
         year,
         age,
         monthlyPKV: Math.round(totalMonthlyPKV),
         monthlyGKV: Math.round(currentGKV),
-        monthlyGBZ: Math.round(monthlyGBZ),
-        cumulativeGBZ,
+        monthlyGBZ: (age <= gbzStopPayAge) ? Math.round(currentBasePremiumCalc*0.1*((viktorCovered?1:0)+(gannaCovered?1:0))) : 0,
+        GBZ_fund: GBZ_fund,
         PKV: annualPKV,
         GKV: annualGKV,
         cumulativePKV,
         cumulativeGKV,
         difference: cumulativeGKV - cumulativePKV,
-        viktorBasePremium: Math.round(currentBasePremium),
-        gannaBasePremium: Math.round(currentBasePremium),
+        viktorBasePremium: Math.round(currentBasePremiumCalc),
+        gannaBasePremium: Math.round(currentBasePremiumCalc),
         child1Premium: Math.round(currentChild1PKV),
         child2Premium: Math.round(currentChild2PKV),
         deductible: Math.round(monthlyDeductible),
@@ -175,27 +168,113 @@ const InsuranceComparison = () => {
   const firstYear = data[0];
 
   return (
-    <div className="w-full p-4">
-      <div className="mb-4">
-        <h2 className="text-lg font-bold">PKV vs GKV Cost Comparison (Real GBZ Lifecycle)</h2>
-        <p className="text-sm text-gray-600 mb-2">
-          Ages 41–60: base premium +10% GBZ, +2% growth/year<br/>
-          Ages 61–66: base premium only (+2%/year, no GBZ)<br/>
-          Age 67+: base premium (+2%/year) - 94.42€ stabilization<br/>
-          Children: 3% growth, leave at 25<br/>
-          GKV: 3% growth, halved after Viktor ends
-        </p>
-        <div className="mt-4 p-4 bg-blue-50 rounded">
-          <h3 className="font-bold mb-2">Lifetime Summary:</h3>
-          <ul className="text-sm">
-            <li>Initial Monthly PKV: {firstYear.monthlyPKV}€</li>
-            <li>Initial Monthly GKV: {firstYear.monthlyGKV}€</li>
-            <li>Total PKV: {(finalYear.cumulativePKV / 1000).toFixed(0)}k€</li>
-            <li>Total GKV: {(finalYear.cumulativeGKV / 1000).toFixed(0)}k€</li>
-            <li>Difference (GKV - PKV): {(finalYear.difference / 1000).toFixed(0)}k€</li>
-          </ul>
+    <div className="w-full p-4 space-y-6">
+      <div>
+        <h2 className="text-lg font-bold mb-2">Input Parameters</h2>
+        <div className="grid grid-cols-4 gap-4 mb-4">
+          <div className="col-span-1 space-y-2">
+            <h3 className="font-semibold">General</h3>
+            <label className="block">
+              <span className="text-sm">Start Year</span>
+              <input type="number" className="w-full border p-1" value={startYear} onChange={e=>setStartYear(parseInt(e.target.value))}/>
+            </label>
+            <label className="block">
+              <span className="text-sm">Current Age</span>
+              <input type="number" className="w-full border p-1" value={currentAge} onChange={e=>setCurrentAge(parseInt(e.target.value))}/>
+            </label>
+            <label className="block">
+              <span className="text-sm">Viktor LE</span>
+              <input type="number" className="w-full border p-1" value={viktorLifeExpectancy} onChange={e=>setViktorLifeExpectancy(parseInt(e.target.value))}/>
+            </label>
+            <label className="block">
+              <span className="text-sm">Ganna LE</span>
+              <input type="number" className="w-full border p-1" value={gannaLifeExpectancy} onChange={e=>setGannaLifeExpectancy(parseInt(e.target.value))}/>
+            </label>
+          </div>
+          <div className="col-span-1 space-y-2">
+            <h3 className="font-semibold">Children</h3>
+            <label className="block">
+              <span className="text-sm">Child1 Age Now</span>
+              <input type="number" className="w-full border p-1" value={child1CurrentAge} onChange={e=>setChild1CurrentAge(parseInt(e.target.value))}/>
+            </label>
+            <label className="block">
+              <span className="text-sm">Child2 Age Now</span>
+              <input type="number" className="w-full border p-1" value={child2CurrentAge} onChange={e=>setChild2CurrentAge(parseInt(e.target.value))}/>
+            </label>
+            <label className="block">
+              <span className="text-sm">Child Premium</span>
+              <input type="number" step="0.01" className="w-full border p-1" value={childPremium} onChange={e=>setChildPremium(parseFloat(e.target.value))}/>
+            </label>
+          </div>
+          <div className="col-span-1 space-y-2">
+            <h3 className="font-semibold">GBZ</h3>
+            <label className="block">
+              <span className="text-sm">GBZ Stop Pay Age</span>
+              <input type="number" className="w-full border p-1" value={gbzStopPayAge} onChange={e=>setGbzStopPayAge(parseInt(e.target.value))}/>
+            </label>
+            <label className="block">
+              <span className="text-sm">GBZ Stabilize Age</span>
+              <input type="number" className="w-full border p-1" value={gbzStabilizeAge} onChange={e=>setGbzStabilizeAge(parseInt(e.target.value))}/>
+            </label>
+            <label className="block">
+              <span className="text-sm">Annual Stabilization €</span>
+              <input type="number" step="0.01" className="w-full border p-1" value={annualStabilizationAmount} onChange={e=>setAnnualStabilizationAmount(parseFloat(e.target.value))}/>
+            </label>
+            <label className="block">
+              <span className="text-sm">Interest Rate</span>
+              <input type="number" step="0.001" className="w-full border p-1" value={interestRate} onChange={e=>setInterestRate(parseFloat(e.target.value))}/>
+            </label>
+          </div>
+          <div className="col-span-1 space-y-2">
+            <h3 className="font-semibold">Premiums & Rates</h3>
+            <label className="block">
+              <span className="text-sm">Initial Base Premium</span>
+              <input type="number" step="0.01" className="w-full border p-1" value={initialBasePremium} onChange={e=>setInitialBasePremium(parseFloat(e.target.value))}/>
+            </label>
+            <label className="block">
+              <span className="text-sm">Base Premium Increase</span>
+              <input type="number" step="0.001" className="w-full border p-1" value={basePremiumIncrease} onChange={e=>setBasePremiumIncrease(parseFloat(e.target.value))}/>
+            </label>
+            <label className="block">
+              <span className="text-sm">Child Increase</span>
+              <input type="number" step="0.001" className="w-full border p-1" value={childIncrease} onChange={e=>setChildIncrease(parseFloat(e.target.value))}/>
+            </label>
+            <label className="block">
+              <span className="text-sm">GKV Increase</span>
+              <input type="number" step="0.001" className="w-full border p-1" value={gkvIncrease} onChange={e=>setGkvIncrease(parseFloat(e.target.value))}/>
+            </label>
+            <label className="block">
+              <span className="text-sm">GKV Base</span>
+              <input type="number" step="0.01" className="w-full border p-1" value={gkvBase} onChange={e=>setGkvBase(parseFloat(e.target.value))}/>
+            </label>
+            <label className="block">
+              <span className="text-sm">Deductible/Person</span>
+              <input type="number" step="1" className="w-full border p-1" value={deductiblePerPerson} onChange={e=>setDeductiblePerPerson(parseInt(e.target.value))}/>
+            </label>
+          </div>
         </div>
       </div>
+
+      <div className="mb-4">
+        <h2 className="text-lg font-bold">PKV vs GKV Cost Comparison (GBZ Lifecycle with Depletion)</h2>
+        <p className="text-sm text-gray-600 mb-2">
+          Adjust parameters above and see the changes below.<br/>
+          Approximating monthly contributions, annual interest, and yearly depletion at year-end.
+        </p>
+        {finalYear && firstYear && (
+          <div className="mt-4 p-4 bg-blue-50 rounded">
+            <h3 className="font-bold mb-2">Lifetime Summary:</h3>
+            <ul className="text-sm space-y-1">
+              <li>Initial Monthly PKV: {firstYear.monthlyPKV}€</li>
+              <li>Initial Monthly GKV: {firstYear.monthlyGKV}€</li>
+              <li>Total PKV: {(finalYear.cumulativePKV / 1000).toFixed(0)}k€</li>
+              <li>Total GKV: {(finalYear.cumulativeGKV / 1000).toFixed(0)}k€</li>
+              <li>Difference (GKV - PKV): {(finalYear.difference / 1000).toFixed(0)}k€</li>
+            </ul>
+          </div>
+        )}
+      </div>
+
       <div className="h-96 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
@@ -206,18 +285,19 @@ const InsuranceComparison = () => {
               formatter={(value, name) => [`${value.toLocaleString()}€`, name]}
               labelFormatter={(yearLabel) => {
                 const datum = data.find(d => d.year === +yearLabel);
-                return `Year: ${yearLabel} (Age: ${datum ? datum.age : ''})
-                Monthly PKV: ${datum.monthlyPKV}€
-                Monthly GKV: ${datum.monthlyGKV}€`;
+                return datum 
+                  ? `Year: ${yearLabel} (Age: ${datum.age})
+Monthly PKV: ${datum.monthlyPKV}€
+Monthly GKV: ${datum.monthlyGKV}€
+GBZ Fund: ${datum.GBZ_fund.toLocaleString()}€`
+                  : `Year: ${yearLabel}`;
               }}
             />
             <Legend />
-            <ReferenceLine x={child1LeaveYear} stroke="blue" label="Child1 Leaves" />
-            <ReferenceLine x={child2LeaveYear} stroke="blue" label="Child2 Leaves" />
-            <ReferenceLine x={gbzEndYear} stroke="purple" label="GBZ ends (61)" />
-            <ReferenceLine x={startYear + (67 - currentAge)} stroke="purple" label="GBZ stabilization (67)" />
-            <ReferenceLine x={viktorEndYear} stroke="red" label="Viktor Ends" />
-            <ReferenceLine x={gannaEndYear} stroke="green" label="Ganna Ends" />
+            <ReferenceLine x={startYear+(25 - child1CurrentAge)} stroke="blue" label="Child1 Leaves" />
+            <ReferenceLine x={startYear+(25 - child2CurrentAge)} stroke="blue" label="Child2 Leaves" />
+            <ReferenceLine x={startYear+(gbzStopPayAge - currentAge)} stroke="purple" label="GBZ ends (61)" />
+            <ReferenceLine x={startYear+(gbzStabilizeAge - currentAge)} stroke="purple" label="GBZ stabilization" />
             <Line type="monotone" dataKey="PKV" stroke="#2196F3" name="Annual PKV Cost" />
             <Line type="monotone" dataKey="GKV" stroke="#4CAF50" name="Annual GKV Cost" />
           </LineChart>
@@ -233,13 +313,13 @@ const InsuranceComparison = () => {
               <th className="px-4 py-2 bg-blue-50">Monthly PKV</th>
               <th className="px-4 py-2 bg-green-50">Monthly GKV</th>
               <th className="px-4 py-2">Monthly GBZ</th>
-              <th className="px-4 py-2">Total GBZ</th>
+              <th className="px-4 py-2">GBZ Fund</th>
               <th className="px-4 py-2 bg-blue-50">Annual PKV</th>
               <th className="px-4 py-2 bg-green-50">Annual GKV</th>
               <th className="px-4 py-2">Viktor Base</th>
               <th className="px-4 py-2">Ganna Base</th>
-              <th className="px-4 py-2 bg-blue-50">Child 1 (PKV)</th>
-              <th className="px-4 py-2 bg-blue-50">Child 2 (PKV)</th>
+              <th className="px-4 py-2 bg-blue-50">Child 1</th>
+              <th className="px-4 py-2 bg-blue-50">Child 2</th>
               <th className="px-4 py-2">Deductible</th>
               <th className="px-4 py-2">Covered</th>
               <th className="px-4 py-2">Comments</th>
@@ -253,7 +333,7 @@ const InsuranceComparison = () => {
                 <td className="px-4 py-2 bg-blue-50">{row.monthlyPKV.toLocaleString()}€</td>
                 <td className="px-4 py-2 bg-green-50">{row.monthlyGKV.toLocaleString()}€</td>
                 <td className="px-4 py-2">{row.monthlyGBZ.toLocaleString()}€</td>
-                <td className="px-4 py-2">{row.cumulativeGBZ.toLocaleString()}€</td>
+                <td className="px-4 py-2">{row.GBZ_fund.toLocaleString()}€</td>
                 <td className="px-4 py-2 bg-blue-50">{row.PKV.toLocaleString()}€</td>
                 <td className="px-4 py-2 bg-green-50">{row.GKV.toLocaleString()}€</td>
                 <td className="px-4 py-2">{row.viktorBasePremium.toLocaleString()}€</td>
