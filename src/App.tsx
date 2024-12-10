@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, ReferenceLine } from 'recharts';
 
 const InsuranceComparison = () => {
-  // Key parameters as state variables for flexibility:
+  // Key parameters as state variables
   const [startYear, setStartYear] = useState(2024);
   const [currentAge, setCurrentAge] = useState(41);
   const [viktorLifeExpectancy, setViktorLifeExpectancy] = useState(87);
@@ -13,21 +13,29 @@ const InsuranceComparison = () => {
 
   const [gbzStopPayAge, setGbzStopPayAge] = useState(60);
   const [gbzStabilizeAge, setGbzStabilizeAge] = useState(67);
-  const [annualStabilizationAmount, setAnnualStabilizationAmount] = useState(94.42 * 12);
-  const [interestRate, setInterestRate] = useState(0.02);
+  const [annualStabilizationAmount, setAnnualStabilizationAmount] = useState(3000); // default 2000€
+  const [interestRate, setInterestRate] = useState(2); // percent, input as 2 means 2%
 
-  const [initialBasePremium, setInitialBasePremium] = useState(680.36); // From previous calculation
-  const [basePremiumIncrease, setBasePremiumIncrease] = useState(0.03); // Renamed and default to 3%
-  const [childIncrease, setChildIncrease] = useState(0.03);
-  const [gkvIncrease, setGkvIncrease] = useState(0.03);
+  const [initialBasePremium, setInitialBasePremium] = useState(680.36);
+  const [pkvSurcharge, setPkvSurcharge] = useState(0); // in %
+  const [basePremiumIncrease, setBasePremiumIncrease] = useState(3); // 3% default
+  const [childIncrease, setChildIncrease] = useState(3);  // 3% default
+  const [gkvIncrease, setGkvIncrease] = useState(3);    // 3% default from google data
 
   const [childPremium, setChildPremium] = useState(223.75);
   const [gkvBase, setGkvBase] = useState(2200.00);
   const [deductiblePerPerson, setDeductiblePerPerson] = useState(800);
 
+  // Income-based GKV adjustment
+  const [workingLifeIncome, setWorkingLifeIncome] = useState(140);
+  const [retirementIncome, setRetirementIncome] = useState(35);
+
   const totalYears = gannaLifeExpectancy - currentAge;
 
   const calculateProjection = () => {
+    // Apply PKV surcharge to initial base premium
+    const adjustedBasePremium = initialBasePremium * (1 + pkvSurcharge/100);
+
     let GBZ_fund = 0;
     const data = [];
 
@@ -35,7 +43,6 @@ const InsuranceComparison = () => {
       const year = startYear + i;
       const age = currentAge + i;
 
-      // Coverage
       const viktorCovered = age <= viktorLifeExpectancy;
       const gannaCovered = age <= gannaLifeExpectancy;
 
@@ -45,7 +52,8 @@ const InsuranceComparison = () => {
       const child2Covered = year < child2LeaveYear;
 
       const yearsFrom41 = age - currentAge;
-      const currentBasePremiumCalc = initialBasePremium * Math.pow(1 + basePremiumIncrease, yearsFrom41);
+      const bpIncreaseFraction = basePremiumIncrease / 100.0;
+      const currentBasePremiumCalc = adjustedBasePremium * Math.pow(1 + bpIncreaseFraction, yearsFrom41);
 
       // GBZ Discount logic
       let hasGBZDiscount = false;
@@ -84,13 +92,20 @@ const InsuranceComparison = () => {
       }
 
       // Children premiums
-      const childMultiplier = Math.pow(1 + childIncrease, i);
+      const chIncFraction = childIncrease / 100.0;
+      const childMultiplier = Math.pow(1 + chIncFraction, i);
       const currentChild1PKV = child1Covered ? (childPremium * childMultiplier) : 0;
       const currentChild2PKV = child2Covered ? (childPremium * childMultiplier) : 0;
 
-      // GKV
-      const gkvMultiplier = Math.pow(1 + gkvIncrease, i);
-      const currentGKV = gkvBase * gkvMultiplier; // Both covered entire time
+      // GKV logic with retirement income drop at 67
+      const gkvIncFraction = gkvIncrease / 100.0;
+      const gkvMultiplier = Math.pow(1 + gkvIncFraction, i);
+
+      let currentGKV = gkvBase * gkvMultiplier;
+      if (age >= 67) {
+        const ratio = (retirementIncome * 1000) / (workingLifeIncome * 1000);
+        currentGKV *= ratio; // reduce GKV after retirement
+      }
 
       // Deductibles
       let membersWithDeductible = 0;
@@ -123,7 +138,8 @@ const InsuranceComparison = () => {
         if (GBZ_fund_end < 0) GBZ_fund_end = 0;
       }
 
-      GBZ_fund_end = Math.round(GBZ_fund_end * (1 + interestRate));
+      const intFraction = interestRate / 100.0;
+      GBZ_fund_end = Math.round(GBZ_fund_end * (1 + intFraction));
       GBZ_fund = GBZ_fund_end;
 
       const prev = data[data.length - 1] || { cumulativePKV: 0, cumulativeGKV: 0 };
@@ -133,8 +149,11 @@ const InsuranceComparison = () => {
       let comment = '';
       const gbzEndYearCalc = startYear+(gbzStopPayAge - currentAge);
       const gbzStabilizeYear = startYear+(gbzStabilizeAge - currentAge);
-      if (year === child1LeaveYear) comment = 'Child 1 leaves';
-      if (year === child2LeaveYear) comment = 'Child 2 leaves';
+      const child1LY = startYear+(25 - child1CurrentAge);
+      const child2LY = startYear+(25 - child2CurrentAge);
+
+      if (year === child1LY) comment = 'Child 1 leaves';
+      if (year === child2LY) comment = 'Child 2 leaves';
       if (year === gbzEndYearCalc) comment = 'GBZ ends (age 61)';
       if (year === gbzStabilizeYear) comment = 'GBZ stabilization (age 67)';
 
@@ -190,6 +209,15 @@ const InsuranceComparison = () => {
               <span className="text-sm">Ganna LE</span>
               <input type="number" className="w-full border p-1" value={gannaLifeExpectancy} onChange={e=>setGannaLifeExpectancy(parseInt(e.target.value))}/>
             </label>
+            <h3 className="font-semibold mt-4">Income</h3>
+            <label className="block">
+              <span className="text-sm">Working Life Income (k€)</span>
+              <input type="number" className="w-full border p-1" value={workingLifeIncome} onChange={e=>setWorkingLifeIncome(parseInt(e.target.value))}/>
+            </label>
+            <label className="block">
+              <span className="text-sm">Retirement Income (k€)</span>
+              <input type="number" className="w-full border p-1" value={retirementIncome} onChange={e=>setRetirementIncome(parseInt(e.target.value))}/>
+            </label>
           </div>
           <div className="col-span-1 space-y-2">
             <h3 className="font-semibold">Children</h3>
@@ -204,6 +232,11 @@ const InsuranceComparison = () => {
             <label className="block">
               <span className="text-sm">Child Premium</span>
               <input type="number" step="0.01" className="w-full border p-1" value={childPremium} onChange={e=>setChildPremium(parseFloat(e.target.value))}/>
+            </label>
+            <h3 className="font-semibold mt-4">PKV Surcharge</h3>
+            <label className="block">
+              <span className="text-sm">PKV Surcharge (%)</span>
+              <input type="number" step="0.1" className="w-full border p-1" value={pkvSurcharge} onChange={e=>setPkvSurcharge(parseFloat(e.target.value))}/>
             </label>
           </div>
           <div className="col-span-1 space-y-2">
@@ -221,7 +254,7 @@ const InsuranceComparison = () => {
               <input type="number" step="0.01" className="w-full border p-1" value={annualStabilizationAmount} onChange={e=>setAnnualStabilizationAmount(parseFloat(e.target.value))}/>
             </label>
             <label className="block">
-              <span className="text-sm">Interest Rate</span>
+              <span className="text-sm">Interest Rate (%)</span>
               <input type="number" step="0.001" className="w-full border p-1" value={interestRate} onChange={e=>setInterestRate(parseFloat(e.target.value))}/>
             </label>
           </div>
@@ -232,15 +265,15 @@ const InsuranceComparison = () => {
               <input type="number" step="0.01" className="w-full border p-1" value={initialBasePremium} onChange={e=>setInitialBasePremium(parseFloat(e.target.value))}/>
             </label>
             <label className="block">
-              <span className="text-sm">Base Premium Increase</span>
+              <span className="text-sm">Base Premium Increase (%)</span>
               <input type="number" step="0.001" className="w-full border p-1" value={basePremiumIncrease} onChange={e=>setBasePremiumIncrease(parseFloat(e.target.value))}/>
             </label>
             <label className="block">
-              <span className="text-sm">Child Increase</span>
+              <span className="text-sm">Child Increase (%)</span>
               <input type="number" step="0.001" className="w-full border p-1" value={childIncrease} onChange={e=>setChildIncrease(parseFloat(e.target.value))}/>
             </label>
             <label className="block">
-              <span className="text-sm">GKV Increase</span>
+              <span className="text-sm">GKV Increase (%)</span>
               <input type="number" step="0.001" className="w-full border p-1" value={gkvIncrease} onChange={e=>setGkvIncrease(parseFloat(e.target.value))}/>
             </label>
             <label className="block">
@@ -248,7 +281,7 @@ const InsuranceComparison = () => {
               <input type="number" step="0.01" className="w-full border p-1" value={gkvBase} onChange={e=>setGkvBase(parseFloat(e.target.value))}/>
             </label>
             <label className="block">
-              <span className="text-sm">Deductible/Person</span>
+              <span className="text-sm">Deductible/Person (€)</span>
               <input type="number" step="1" className="w-full border p-1" value={deductiblePerPerson} onChange={e=>setDeductiblePerPerson(parseInt(e.target.value))}/>
             </label>
           </div>
@@ -258,8 +291,9 @@ const InsuranceComparison = () => {
       <div className="mb-4">
         <h2 className="text-lg font-bold">PKV vs GKV Cost Comparison (GBZ Lifecycle with Depletion)</h2>
         <p className="text-sm text-gray-600 mb-2">
-          Adjust parameters above and see the changes below.<br/>
-          Approximating monthly contributions, annual interest, and yearly depletion at year-end.
+          Adjust parameters above and see changes below.<br/>
+          GBZ fund grows with contributions & interest, reduced after stabilization if enough funds available.<br/>
+          GKV reduces at retirement age (67) due to lower income.
         </p>
         {finalYear && firstYear && (
           <div className="mt-4 p-4 bg-blue-50 rounded">
@@ -300,6 +334,7 @@ GBZ Fund: ${datum.GBZ_fund.toLocaleString()}€`
             <ReferenceLine x={startYear+(gbzStabilizeAge - currentAge)} stroke="purple" label="GBZ stabilization" />
             <Line type="monotone" dataKey="PKV" stroke="#2196F3" name="Annual PKV Cost" />
             <Line type="monotone" dataKey="GKV" stroke="#4CAF50" name="Annual GKV Cost" />
+            <Line type="monotone" dataKey="GBZ_fund" stroke="#FFC107" name="GBZ Fund" />
           </LineChart>
         </ResponsiveContainer>
       </div>
