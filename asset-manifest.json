@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/pkv-gkv-calculator/static/css/main.4abf7f76.css",
-    "main.js": "/pkv-gkv-calculator/static/js/main.1d50c013.js",
+    "main.css": "/pkv-gkv-calculator/static/css/main.196b80d6.css",
+    "main.js": "/pkv-gkv-calculator/static/js/main.a13ea90e.js",
     "index.html": "/pkv-gkv-calculator/index.html",
-    "main.4abf7f76.css.map": "/pkv-gkv-calculator/static/css/main.4abf7f76.css.map",
-    "main.1d50c013.js.map": "/pkv-gkv-calculator/static/js/main.1d50c013.js.map"
+    "main.196b80d6.css.map": "/pkv-gkv-calculator/static/css/main.196b80d6.css.map",
+    "main.a13ea90e.js.map": "/pkv-gkv-calculator/static/js/main.a13ea90e.js.map"
   },
   "entrypoints": [
-    "static/css/main.4abf7f76.css",
-    "static/js/main.1d50c013.js"
+    "static/css/main.196b80d6.css",
+    "static/js/main.a13ea90e.js"
   ]
 }
