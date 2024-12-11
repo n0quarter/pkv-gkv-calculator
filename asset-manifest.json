@@ -1,0 +1,13 @@
+{
+  "files": {
+    "main.css": "/pkv-gkv-calculator/static/css/main.97989876.css",
+    "main.js": "/pkv-gkv-calculator/static/js/main.6fa82bf7.js",
+    "index.html": "/pkv-gkv-calculator/index.html",
+    "main.97989876.css.map": "/pkv-gkv-calculator/static/css/main.97989876.css.map",
+    "main.6fa82bf7.js.map": "/pkv-gkv-calculator/static/js/main.6fa82bf7.js.map"
+  },
+  "entrypoints": [
+    "static/css/main.97989876.css",
+    "static/js/main.6fa82bf7.js"
+  ]
+}
